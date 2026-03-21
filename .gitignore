@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.venv/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environments
+.env
+config.json
+
+# Audio and Reports
+temp_audio/
+reports/
+test.m4a
+generated_interview_report.docx
+processed_template.docx
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,11 @@
+streamlit
+openai
+python-dotenv
+python-docx
+markdown2
+pypdf
+transformers
+torch
+librosa
+soundfile
+accelerate
