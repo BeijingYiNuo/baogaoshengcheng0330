@@ -31,3 +31,5 @@ processed_template.docx
 # OS
 .DS_Store
 Thumbs.db
+
+pandoc*.msi

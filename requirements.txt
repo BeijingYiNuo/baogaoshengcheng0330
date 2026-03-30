@@ -2,10 +2,12 @@ streamlit
 openai
 python-dotenv
 python-docx
-markdown2
 pypdf
+pypandoc
+tqdm
 transformers
 torch
 librosa
 soundfile
 accelerate
+static_ffmpeg
