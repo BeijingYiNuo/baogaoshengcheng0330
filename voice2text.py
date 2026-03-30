@@ -6,7 +6,11 @@ import os
 import static_ffmpeg
 
 # 自动安装并配置 ffmpeg 环境
-static_ffmpeg.add_paths()
+try:
+    static_ffmpeg.add_paths()
+except Exception as e:
+    print(f"Warning: ffmpeg configuration failed: {e}")
+    print("Tip: Please try manual installation of ffmpeg or run as Administrator.")
 
 # 配置模型
 # 使用 OpenAI 较新的 Whisper Large V3 Turbo 模型，速度更快且准确率极高
@@ -19,8 +23,9 @@ def transcribe_audio_generator(audio_path, language="zh"):
     Yields:
     - (progress, partial_text)
     """
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    device = "cuda"
+    # 自动选择设备: 优先 CUDA，其次 CPU
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
     # Whisper Large V3 Turbo 建议使用 float16 以节省显存并加速
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
