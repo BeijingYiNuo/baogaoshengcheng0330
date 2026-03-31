@@ -2,12 +2,13 @@
 import os
 import json
 import concurrent.futures
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from prompts import PROMPT_SYSTEM, ATTENTION_PROMPT
-from doc2md import get_splited_md
+from doc2md import get_splited_md, split_md
 from dotenv import load_dotenv
 from docx import Document
 import re
+import asyncio
 
 load_dotenv()
 
@@ -86,6 +87,55 @@ def generate_interview_data_multi_stage(
                 all_data.update(data)
             except Exception as e:
                 raise Exception(f"并行生成中出错 ({idx}): {str(e)}")
+    score_postprocess(all_data)
+
+    return all_data
+
+
+async def generate_interview_data_multi_stage_async(
+    api_key: str,
+    base_url: str,
+    model: str,
+    template_md: str,
+    resume_text: str,
+    transcript_text: str,
+    all_data: dict[str, str | float | int] = {},
+):
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+    templates = split_md(template_md)
+
+    async def fetch_data_from_llm(idx, template_content):
+        prompt = (
+            PROMPT_SYSTEM.replace("{TEMPLATE}", template_content)
+            .replace("{RESUME}", resume_text)
+            .replace("{VOICE2TEXT}", transcript_text)
+            .replace("{ATTENTION}", ATTENTION_PROMPT)
+        )
+
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            return idx, json.loads(response.choices[0].message.content)
+        except Exception as e:
+            raise Exception(f"{idx} 生成失败: {str(e)}")
+
+    # 创建任务
+    tasks = [fetch_data_from_llm(idx, content) for idx, content in enumerate(templates)]
+
+    # 并发执行
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # 处理结果
+    for result in results:
+        if isinstance(result, Exception):
+            raise Exception(f"并行生成中出错: {str(result)}")
+        idx, data = result
+        all_data.update(data)
+
     score_postprocess(all_data)
 
     return all_data

@@ -33,3 +33,4 @@ processed_template.docx
 Thumbs.db
 
 pandoc*.msi
+~$*
