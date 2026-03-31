@@ -1,9 +1,18 @@
 from pydantic import BaseModel, ConfigDict
 from os.path import dirname
+import tempfile
 import json
 from fastapi import FastAPI
-from report_generator import generate_interview_data_multi_stage_async
+from fastapi.responses import FileResponse
+from report_generator import (
+    generate_interview_data_multi_stage_async,
+    fill_docx_template,
+)
+from state_mgr import SimpleStateManager
+import base64
+from typing import Literal, Any
 
+ssm = SimpleStateManager("./reports")
 app = FastAPI()
 
 
@@ -20,6 +29,9 @@ class BaseInfo(BaseModel):
 
 class RequestContent(BaseModel):
     base_info: BaseInfo = BaseInfo()
+    template_docx_b64: str = base64.b64encode(
+        open(dirname(__file__) + "/template.docx", "rb").read()
+    ).decode()
     template_md: str = open(dirname(__file__) + "/template.md", encoding="utf-8")
     resume_text: str = "Resume Content"
     transcript_text: str = "Transcript Text"
@@ -31,12 +43,20 @@ class RequestContent(BaseModel):
     openai_model: str = json.load(open(dirname(__file__) + "config.json"))[
         "deepseek-chat"
     ]
+    request_type: Literal["json", "docx"] = "docx"
 
 
-@app.post("/generate")
-async def generate(request_content: RequestContent):
+class GenerateJSONResponse(BaseModel):
+    idx: int
+    data: dict[str, Any]
+
+@app.post(
+    "/generate",
+    response_model=GenerateJSONResponse | FileResponse,
+)
+async def generate_docx(request_content: RequestContent):
     data = request_content.base_info.model_dump()
-    data = await generate_interview_data_multi_stage_async(
+    info = await generate_interview_data_multi_stage_async(
         request_content.openai_api_key,
         request_content.openai_base_url,
         request_content.openai_model,
@@ -44,5 +64,18 @@ async def generate(request_content: RequestContent):
         request_content.resume_text,
         request_content.transcript_text,
         data,
+        ssm,
     )
-    
+    template_docx_file_path = (
+        tempfile.gettempdir() + "/" + info.filename(".template.docx")
+    )
+    open(template_docx_file_path, "wb").write(
+        base64.b64decode(request_content.template_docx_b64)
+    )
+    fill_docx_template(
+        template_docx_file_path, ssm.report_path + "/" + info.filename(), data
+    )
+    if request_content.request_type == "docx":
+        return FileResponse(info.filename())
+    elif request_content.request_type == "json":
+        return GenerateJSONResponse(idx=info.idx, data=data)

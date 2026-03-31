@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from docx import Document
 import re
 import asyncio
+from state_mgr import StateManager, FileInfo
 
 load_dotenv()
 
@@ -100,7 +101,11 @@ async def generate_interview_data_multi_stage_async(
     resume_text: str,
     transcript_text: str,
     all_data: dict[str, str | float | int] = {},
-):
+    sm: StateManager = None,
+) -> FileInfo:
+    if sm is not None:
+        f_info = sm.start()
+
     client = AsyncOpenAI(api_key=api_key, base_url=base_url)
     templates = split_md(template_md)
 
@@ -123,22 +128,27 @@ async def generate_interview_data_multi_stage_async(
         except Exception as e:
             raise Exception(f"{idx} 生成失败: {str(e)}")
 
-    # 创建任务
-    tasks = [fetch_data_from_llm(idx, content) for idx, content in enumerate(templates)]
+    tasks = [
+        asyncio.create_task(fetch_data_from_llm(idx, content))
+        for idx, content in enumerate(templates)
+    ]
+    done_counter = 0
+    total_counter = len(tasks) + 2
+    for future in asyncio.as_completed(tasks):
+        try:
 
-    # 并发执行
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # 处理结果
-    for result in results:
-        if isinstance(result, Exception):
-            raise Exception(f"并行生成中出错: {str(result)}")
-        idx, data = result
-        all_data.update(data)
-
+            idx, data = await future
+            all_data.update(data)
+        except Exception as e:
+            pass
+        finally:
+            done_counter += 1
+            if sm is not None:
+                sm.update(f_info.idx, done_counter / total_counter)
     score_postprocess(all_data)
-
-    return all_data
+    done_counter += 1
+    sm.update(f_info.idx, done_counter / total_counter, "完成评分")
+    return f_info
 
 
 def fill_docx_template(template_path, output_path, data: dict[str, str | float]):
