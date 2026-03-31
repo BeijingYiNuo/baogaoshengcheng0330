@@ -66,7 +66,7 @@ class SimpleStateManager(StateManager):
     def next_id(self) -> int:
         if self.idx_counter is None:
             self.idx_counter = max(
-                *[self.file_name_to_info(fn).idx for fn in self.list_files()]
+                *[self.file_name_to_info(fn).idx for fn in self.list_files()],0,0
             )
         self.idx_counter += 1
         return self.idx_counter

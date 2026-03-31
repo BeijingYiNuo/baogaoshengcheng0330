@@ -10,7 +10,7 @@ from report_generator import (
 )
 from state_mgr import SimpleStateManager
 import base64
-from typing import Literal, Any
+from typing import Literal, Any, Union
 
 ssm = SimpleStateManager("./reports")
 app = FastAPI()
@@ -32,17 +32,15 @@ class RequestContent(BaseModel):
     template_docx_b64: str = base64.b64encode(
         open(dirname(__file__) + "/template.docx", "rb").read()
     ).decode()
-    template_md: str = open(dirname(__file__) + "/template.md", encoding="utf-8")
+    template_md: str = open(dirname(__file__) + "/template.md", encoding="utf-8").read()
     resume_text: str = "Resume Content"
     transcript_text: str = "Transcript Text"
     job_description: str = "Job Description"
-    openai_api_key: str = json.load(open(dirname(__file__) + "config.json"))["api_key"]
-    openai_base_url: str = json.load(open(dirname(__file__) + "config.json"))[
+    openai_api_key: str = json.load(open(dirname(__file__) + "/config.json"))["api_key"]
+    openai_base_url: str = json.load(open(dirname(__file__) + "/config.json"))[
         "base_url"
     ]
-    openai_model: str = json.load(open(dirname(__file__) + "config.json"))[
-        "deepseek-chat"
-    ]
+    openai_model: str = json.load(open(dirname(__file__) + "/config.json"))["model"]
     request_type: Literal["json", "docx"] = "docx"
 
 
@@ -50,9 +48,31 @@ class GenerateJSONResponse(BaseModel):
     idx: int
     data: dict[str, Any]
 
+
+@app.post("/doc2md", response_model=str)
+async def doc2md():
+    pass
+
+
 @app.post(
     "/generate",
-    response_model=GenerateJSONResponse | FileResponse,
+    response_model=Union[GenerateJSONResponse, None],
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "idx": 1,
+                        "data": BaseInfo().model_dump(),
+                    }
+                },
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                    "schema": {"type": "string", "format": "binary"}
+                },
+            },
+            "description": "返回 JSON 或 DOCX 文件",
+        }
+    },
 )
 async def generate_docx(request_content: RequestContent):
     data = request_content.base_info.model_dump()
@@ -76,6 +96,10 @@ async def generate_docx(request_content: RequestContent):
         template_docx_file_path, ssm.report_path + "/" + info.filename(), data
     )
     if request_content.request_type == "docx":
-        return FileResponse(info.filename())
+        return FileResponse(
+            path=ssm.report_path + "/" + info.filename(),
+            filename=info.filename(),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
     elif request_content.request_type == "json":
         return GenerateJSONResponse(idx=info.idx, data=data)
