@@ -1,7 +1,11 @@
 # app.py
 import streamlit as st
 import os
-from report_generator import generate_interview_data_multi_stage, fill_docx_template
+import asyncio
+from report_generator import (
+    generate_interview_data_multi_stage_async,
+    fill_docx_template,
+)
 from voice2text import transcribe_audio_generator
 from docx import Document
 from io import BytesIO
@@ -10,6 +14,7 @@ import json
 import datetime
 import tempfile
 import subprocess
+import traceback
 
 CONFIG_FILE = "config.json"
 DEFAULT_TEMPLATE = "template.docx"
@@ -554,12 +559,17 @@ def render_step_two():
                         unsafe_allow_html=True,
                     )
 
-                interview_data = generate_interview_data_multi_stage(
-                    api_key=st.session_state.config.get("api_key"),
-                    base_url=st.session_state.config.get("base_url"),
-                    model=st.session_state.config.get("model"),
-                    resume_text=resume_text,
-                    transcript_text=transcript_text,
+                interview_data = {}
+                _ = asyncio.run(
+                    generate_interview_data_multi_stage_async(
+                        api_key=st.session_state.config.get("api_key"),
+                        base_url=st.session_state.config.get("base_url"),
+                        model=st.session_state.config.get("model"),
+                        template_md=open("template.md", encoding="utf-8").read(),
+                        resume_text=resume_text,
+                        transcript_text=transcript_text,
+                        all_data=interview_data,
+                    )
                 )
 
                 # 阶段 3
@@ -610,6 +620,7 @@ def render_step_two():
             except Exception as e:
                 loading_container.empty()
                 st.error(f"❌ 生成报告失败: {str(e)}")
+                traceback.print_exception(e)
 
     # 显示最新生成的报告下载按钮和面试结果总览（如果存在）
     if st.session_state.last_report:

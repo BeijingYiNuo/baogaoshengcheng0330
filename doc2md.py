@@ -44,14 +44,16 @@ def llm_process(doc_md: str, config: dict[str, str], progress: bool = True) -> s
     result = []
     total_estimate = int(len(doc_md) * 0.6)  # 用输入长度估算
 
-    pbar = tqdm(total=total_estimate, disable=not progress, desc="LLM Processing",leave=False)
+    pbar = tqdm(
+        total=total_estimate, disable=not progress, desc="LLM Processing", leave=False
+    )
 
     for chunk in stream:
         if chunk.choices and chunk.choices[0].delta.content:
             text = chunk.choices[0].delta.content
             result.append(text)
             tqdm.write(text, end="")
-            
+
             # 用输出长度推进（粗略估计）
             pbar.update(len(text))
 
@@ -128,7 +130,7 @@ if __name__ == "__main__":
     import json
 
     open("template.md", "w", encoding="utf-8").write(
-        llm_process(pandoc_process(), json.load(open("config.json")))
+        llm_process(pandoc_process(), json.load(open("config.json"))).replace("\\", "")
     )
     json.dump(
         split_md(open("template.md", "r", encoding="utf-8").read()),

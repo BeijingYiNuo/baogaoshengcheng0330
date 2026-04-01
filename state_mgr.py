@@ -24,14 +24,26 @@ class StateManager(ABC):
 
 class FileInfo:
     def __init__(self, file_name: str):
-        file_name = file_name.split(".")[:-1]
-        self.idx, self.gen_time = file_name.split("_")
+        # file_name like "1_2026-03-31-12-00.docx"
+        if isinstance(file_name, (list, tuple)) and file_name:
+            file_name = file_name[0]
+
+        if not isinstance(file_name, str):
+            raise TypeError(f"Invalid file_name type: {type(file_name)}")
+
+        base_name = file_name.rsplit(".", 1)[0]
+
+        if "_" in base_name:
+            self.idx, self.gen_time = base_name.split("_", 1)
+        else:
+            self.idx = base_name
+            self.gen_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
 
     @staticmethod
-    def from_info(idx: int, gen_time: str = None, postfix: str = ".docx") -> FileInfo:
+    def from_info(idx: int, gen_time: str = None, postfix: str = ".docx") -> "FileInfo":
         if gen_time is None:
-            gen_time = datetime.now().strftime("%Y-%m-%d-%H-%M")
-        return __class__(f"{idx}_{gen_time}{postfix}")
+            gen_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
+        return FileInfo(f"{idx}_{gen_time}{postfix}")
 
     def filename(self, postfix: str = ".docx") -> str:
         return self.idx + "_" + self.gen_time + postfix
