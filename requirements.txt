@@ -5,9 +5,9 @@ python-docx
 pypdf
 pypandoc
 tqdm
-transformers
-torch
-librosa
-soundfile
-accelerate
-static_ffmpeg
+# transformers
+# torch
+# librosa
+# soundfile
+# accelerate
+# static_ffmpeg
