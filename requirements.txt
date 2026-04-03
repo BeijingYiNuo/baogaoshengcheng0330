@@ -11,3 +11,5 @@ librosa
 soundfile
 accelerate
 static_ffmpeg
+uvicorn
+fastapi

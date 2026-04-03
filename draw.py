@@ -3,13 +3,18 @@ def draw():
     import numpy as np
     import matplotlib.pyplot as plt
     from io import BytesIO
+    import matplotlib.font_manager as fm
+    font_path = "fonts/SimHei.ttf"
+    fm.fontManager.addfont(font_path)
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = ["SimHei"]
+    plt.rcParams["axes.unicode_minus"] = False
     try:
     #<REPLACE_START> 
         labels = ["A", "B", "C", "D", "E"]
         values = [65, 80, 55, 90, 75]
 
-        plt.rcParams["font.sans-serif"] = ["SimHei"]
-        plt.rcParams["axes.unicode_minus"] = False
+
         angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False)
         values = np.concatenate((values, [values[0]]))
         angles = np.concatenate((angles, [angles[0]]))
