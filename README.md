@@ -1,6 +1,13 @@
 ---
 title: 面试报告自动生成工具
 emoji: 📑
+colorFrom: white
+colorTo: white
+sdk: python3.13
+sdk_version: "python3.13"
+# python3.13
+python_version: "python3.13"
+/python3.13
 app_file: asgi.py
 pinned: false
 ---
