@@ -13,12 +13,34 @@ from state_mgr import StateManager, FileInfo
 from io import BytesIO
 import textwrap
 from docx.shared import Inches
+from datetime import datetime
+import random
 
 load_dotenv()
 
 
+def record(prompt: str, response: str, skip: bool = True):
+    if skip:
+        return
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    ts = f"{ts}_{random.randint(100,999)}"
+    os.makedirs("record", exist_ok=True)
+    open(f"record/{ts}.md", "w", encoding="utf-8").write(
+        f"# PROMPT\n{prompt}\n# RESPONSE\n{response}"
+    )
+
+
 def strip_code_fence(text):
     return re.sub(r"```.*?\n|```", "", text, flags=re.DOTALL)
+
+
+def remove_invalid_key(doc: str, data: dict):
+    keys = set[str](data.keys())
+    for key in keys:
+        if "{{" + key in doc:
+            continue
+        else:
+            del data[key]
 
 
 def build_and_run_draw(
@@ -55,7 +77,10 @@ def score_postprocess(all_data: dict[str, str | float]):
     level_dim = dict[str, str]()
     for key, value in all_data.items():
         if key.startswith("Score_AI_"):
-            value = float(value)
+            try:
+                value = float(value)
+            except:
+                value = 70.0
             dim_name = key.replace("Score_AI_", "")
             score_dim[dim_name] = value
             level_dim[dim_name] = get_grade(value)
@@ -67,7 +92,14 @@ def score_postprocess(all_data: dict[str, str | float]):
     else:
         total_avg = 0.0
     all_data["Score_TotalAvg"] = total_avg
-    all_data["Score_Comparision"] = "高于" if total_avg > 70 else "低于"
+    all_data["Score_Comparison"] = "高于" if total_avg > 70 else "低于"
+    all_data["Score_DimCount"] = len(level_dim)
+    all_data["Score_MetCount"] = sum(
+        1 for _, dim_score in score_dim.items() if dim_score > 70
+    )
+    all_data["Score_UnmetCount"] = (
+        all_data["Score_DimCount"] - all_data["Score_MetCount"]
+    )
 
 
 async def draw_chart(
@@ -82,15 +114,28 @@ async def draw_chart(
     prompt = PROMPT_IMGCODE.replace("{CONTEXT}", shadow_doc).replace(
         "{DRAW_CODE}", draw_code
     )
+
     matches = re.findall(r"\[\[(Chart_\w+)", prompt)
-    for match in matches:
+
+    async def process_match(match: str):
         m_prompt = prompt.replace("{KEY}", match)
+
         response = await client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": m_prompt}],
             temperature=0.3,
         )
-        data[match] = build_and_run_draw(code_str=response.choices[0].message.content)
+        record(m_prompt, response.choices[0].message.content)
+        result = build_and_run_draw(code_str=response.choices[0].message.content)
+        return match, result
+
+    # 并发执行
+    tasks = [process_match(m) for m in matches]
+    results = await asyncio.gather(*tasks)
+
+    # 汇总写回 data
+    for match, result in results:
+        data[match] = result
 
 
 async def generate_interview_data_multi_stage_async(
@@ -124,7 +169,9 @@ async def generate_interview_data_multi_stage_async(
             temperature=0.3,
             response_format={"type": "json_object"},
         )
+        record(prompt, response.choices[0].message.content)
         data = json.loads(response.choices[0].message.content)
+        remove_invalid_key(template_content, data)
         shadow_doc: str = template_content
         for key, value in data.items():
             shadow_doc = shadow_doc.replace("{{" + key + "}}", str(value))

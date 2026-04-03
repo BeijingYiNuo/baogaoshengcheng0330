@@ -1,9 +1,10 @@
 from pydantic import BaseModel, ConfigDict
 from os.path import dirname
 import tempfile
+import os
 import json
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response, JSONResponse
 from report_generator import (
     generate_interview_data_multi_stage_async,
     fill_docx_template,
@@ -11,6 +12,7 @@ from report_generator import (
 from state_mgr import SimpleStateManager
 import base64
 from typing import Literal, Any, Union
+from doc2md import llm_process, llm_process_stream, pandoc_process
 
 ssm = SimpleStateManager("./reports")
 app = FastAPI()
@@ -33,9 +35,9 @@ class RequestContent(BaseModel):
         open(dirname(__file__) + "/template.docx", "rb").read()
     ).decode()
     template_md: str = open(dirname(__file__) + "/template.md", encoding="utf-8").read()
-    resume_text: str = "Resume Content"
-    transcript_text: str = "Transcript Text"
-    job_description: str = "Job Description"
+    resume_text: str = open(dirname(__file__)+"/example_contents/resume.md",encoding="utf-8").read()
+    transcript_text: str = open(dirname(__file__)+"/example_contents/transcript.md",encoding="utf-8").read()
+    job_description: str = open(dirname(__file__)+"/example_contents/jd.md",encoding="utf-8").read()
     openai_api_key: str = json.load(open(dirname(__file__) + "/config.json"))["api_key"]
     openai_base_url: str = json.load(open(dirname(__file__) + "/config.json"))[
         "base_url"
@@ -44,15 +46,86 @@ class RequestContent(BaseModel):
     request_type: Literal["json", "docx"] = "docx"
 
 
+class Doc2MDRequest(BaseModel):
+    template_docx_b64: str = base64.b64encode(
+        open(dirname(__file__) + "/template.docx", "rb").read()
+    ).decode()
+    openai_api_key: str = json.load(open(dirname(__file__) + "/config.json"))["api_key"]
+    openai_base_url: str = json.load(open(dirname(__file__) + "/config.json"))[
+        "base_url"
+    ]
+    openai_model: str = json.load(open(dirname(__file__) + "/config.json"))["model"]
+
+
 class GenerateJSONResponse(BaseModel):
     idx: int
     data: dict[str, Any]
 
 
-@app.post("/doc2md", response_model=str)
-async def doc2md():
-    pass
+@app.post("/doc2md")
+async def doc2md_(request_content: Doc2MDRequest):
+    try:
+        fd, path = tempfile.mkstemp(suffix=".docx")
+        os.close(fd)
+        open(path, "wb").write(base64.b64decode(request_content.template_docx_b64))
+        pan_md = pandoc_process(path)
+        return Response(
+            llm_process(
+                pan_md,
+                config={
+                    "api_key": request_content.openai_api_key,
+                    "base_url": request_content.openai_base_url,
+                    "model": request_content.openai_model,
+                },
+                progress=False,
+            ),
+            media_type="text/markdown",
+        )
+    finally:
+        os.remove(path)
 
+
+@app.post("/doc2md/stream")
+async def doc2md_stream(request_content: Doc2MDRequest):
+
+    async def event_generator():
+        fd, path = tempfile.mkstemp(suffix=".docx")
+        os.close(fd)
+
+        with open(path, "wb") as f:
+            f.write(base64.b64decode(request_content.template_docx_b64))
+
+        try:
+            pan_md = pandoc_process(path)
+
+            async for chunk in llm_process_stream(
+                pan_md,
+                config={
+                    "api_key": request_content.openai_api_key,
+                    "base_url": request_content.openai_base_url,
+                    "model": request_content.openai_model,
+                },
+            ):
+                yield f"data: {chunk}\n\n"
+
+            yield "event: end\ndata: [DONE]\n\n"
+
+        finally:
+            os.remove(path)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+    )
+
+
+@app.get("/state/list")
+def state_list():
+    return JSONResponse(ssm.list_files())
+
+@app.get("/state/{idx}")
+def state_info(idx:int):
+    return JSONResponse(ssm.state_container[idx])
 
 @app.post(
     "/generate",

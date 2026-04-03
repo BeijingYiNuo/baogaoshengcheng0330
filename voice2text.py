@@ -96,7 +96,7 @@ def transcribe_audio(audio_path, language="zh"):
 # 示例用法
 if __name__ == "__main__":
     # 这是一个简单的本地测试
-    test_file = "test.m4a"
+    test_file = "temp_audio/田宇航.m4a"
     if os.path.exists(test_file):
         text = transcribe_audio(test_file)
         print("识别结果:", text)

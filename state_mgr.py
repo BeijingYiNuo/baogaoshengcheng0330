@@ -38,6 +38,7 @@ class FileInfo:
         else:
             self.idx = base_name
             self.gen_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")
+        self.idx = int(self.idx)
 
     @staticmethod
     def from_info(idx: int, gen_time: str = None, postfix: str = ".docx") -> "FileInfo":
@@ -46,7 +47,7 @@ class FileInfo:
         return FileInfo(f"{idx}_{gen_time}{postfix}")
 
     def filename(self, postfix: str = ".docx") -> str:
-        return self.idx + "_" + self.gen_time + postfix
+        return str(self.idx) + "_" + self.gen_time + postfix
 
 
 class FileState:
@@ -78,7 +79,7 @@ class SimpleStateManager(StateManager):
     def next_id(self) -> int:
         if self.idx_counter is None:
             self.idx_counter = max(
-                *[self.file_name_to_info(fn).idx for fn in self.list_files()],0,0
+                *[self.file_name_to_info(fn).idx for fn in self.list_files()], 0, 0
             )
         self.idx_counter += 1
         return self.idx_counter
@@ -94,6 +95,7 @@ class SimpleStateManager(StateManager):
         if info.idx in self.state_container:
             raise KeyError(f"idx {info.idx} already started")
         self.state_container[info.idx] = FileState(info)
+        return info
 
     def abort(self, idx: int) -> None:
         if idx in self.state_container:

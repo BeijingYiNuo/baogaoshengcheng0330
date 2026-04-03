@@ -52,8 +52,8 @@ def llm_process(doc_md: str, config: dict[str, str], progress: bool = True) -> s
         if chunk.choices and chunk.choices[0].delta.content:
             text = chunk.choices[0].delta.content
             result.append(text)
-            tqdm.write(text, end="")
-
+            if progress:
+                tqdm.write(text, end="")
             # 用输出长度推进（粗略估计）
             pbar.update(len(text))
 

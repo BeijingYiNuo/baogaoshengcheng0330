@@ -116,7 +116,7 @@ def generate_summary_docx(summary_data):
     rows = [
         ("候选人姓名", summary_data.get("CandidateName", "未知")),
         ("应聘岗位", summary_data.get("TargetPosition", "未知")),
-        ("综合平均分", str(summary_data.get("TotalAvgScore", "0"))),
+        ("综合平均分", str(summary_data.get("Score_TotalAvg", "0"))),
         ("面试通过情况", summary_data.get("PreScreeningResult", "未知")),
         ("备注", summary_data.get("OtherDetails", "无")),
     ]
