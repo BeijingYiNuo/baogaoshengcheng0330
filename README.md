@@ -1,12 +1,10 @@
 ---
 title: {{面试报告自动生成工具}}
 emoji: {{📑}}
-{{#3.13}}
-python_version: "{{3.13}}"
-{{/3.13}}
 app_file: asgi.py
 pinned: false
 ---
+
 # 面试报告自动生成工具
 
 本项目通过上传简历和音频，结合 OpenAI LLM 和语音识别，生成面试评估报告（Word `.docx`）。
