@@ -1,6 +1,6 @@
 ---
-title: {{面试报告自动生成工具}}
-emoji: {{📑}}
+title: 面试报告自动生成工具
+emoji: 📑
 app_file: asgi.py
 pinned: false
 ---
