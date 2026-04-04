@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>面试报告生成器</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      color: #333;
+      background: #f6f8fb;
+    }
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 24px;
+      text-align: center;
+    }
+    .page {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px 40px;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      margin-top: 0;
+      color: #1f3a5a;
+    }
+    .field {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 12px 18px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .field label {
+      font-weight: 600;
+    }
+    input[type="text"], input[type="datetime-local"], select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d3d8df;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fafbfc;
+    }
+    textarea {
+      min-height: 240px;
+      resize: vertical;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      font-family: Consolas, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+    input[type="file"] {
+      font-size: 14px;
+    }
+    button {
+      border: none;
+      border-radius: 10px;
+      background: #1f78d1;
+      color: white;
+      padding: 12px 20px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .row {
+      display: grid;
+      gap: 18px;
+    }
+    .note {
+      color: #666;
+      font-size: 13px;
+      margin-top: -10px;
+      margin-bottom: 12px;
+    }
+    .result-box {
+      background: #f5f7fb;
+      border: 1px solid #dfe4eb;
+      padding: 16px;
+      border-radius: 10px;
+      min-height: 120px;
+      max-height: 380px;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>面试报告生成器</h1>
+    <p>上传文档，实时生成 template.md，并基于模板输出面试评估报告</p>
+  </header>
+  <div class="page">
+    <div class="card">
+      <h2>1. 上传 DOCX 并流式生成 template.md</h2>
+      <form id="doc2mdForm">
+        <div class="field">
+          <label for="doc2mdFile">模板 DOCX 文件</label>
+          <input id="doc2mdFile" type="file" accept=".docx" required />
+        </div>
+        <div class="field">
+          <span></span>
+          <button id="doc2mdBtn" type="submit">生成 template.md</button>
+        </div>
+      </form>
+      <div class="note">生成过程将通过服务器 SSE 流式返回 markdown 内容，可直接保存为 template.md。</div>
+      <pre id="doc2mdOutput" class="result-box"></pre>
+      <div class="field">
+        <span></span>
+        <button id="saveMdBtn" type="button" disabled>保存为 MD</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. 上传文件并生成报告</h2>
+      <form id="generateForm">
+        <div class="row">
+          <div class="field">
+            <label for="templateDocxFile">模板 DOCX (可选)</label>
+            <input id="templateDocxFile" type="file" accept=".docx" />
+          </div>
+          <div class="field">
+            <label for="templateMdFile">template.md (可选)</label>
+            <input id="templateMdFile" type="file" accept=".md" />
+          </div>
+          <div class="field">
+            <label for="jdFile">jd.md (可选)</label>
+            <input id="jdFile" type="file" accept=".md" />
+          </div>
+          <div class="field">
+            <label for="resumeFile">resume.md (可选)</label>
+            <input id="resumeFile" type="file" accept=".md" />
+          </div>
+          <div class="field">
+            <label for="transcriptFile">transcript.md (可选)</label>
+            <input id="transcriptFile" type="file" accept=".md" />
+          </div>
+        </div>
+        <div class="note">如果不上传某一项，服务端将使用默认示例内容。</div>
+        <h3>基本信息</h3>
+        <div class="row">
+          <div class="field">
+            <label for="InterviewTime">面试时间</label>
+            <input id="InterviewTime" type="text" placeholder="2026年04月04日 14:00" />
+          </div>
+          <div class="field">
+            <label for="InterviewFormat">面试形式</label>
+            <input id="InterviewFormat" type="text" placeholder="线上 / 线下" />
+          </div>
+          <div class="field">
+            <label for="InterviewerInfo">面试官</label>
+            <input id="InterviewerInfo" type="text" placeholder="面试官姓名" />
+          </div>
+          <div class="field">
+            <label for="ReportCreator">报告编制人</label>
+            <input id="ReportCreator" type="text" placeholder="报告编制人" />
+          </div>
+          <div class="field">
+            <label for="ReportCreateDate">报告编制时间</label>
+            <input id="ReportCreateDate" type="text" placeholder="2026年04月04日 14:00" />
+          </div>
+          <div class="field">
+            <label for="AppliedPosition">应聘岗位</label>
+            <input id="AppliedPosition" type="text" placeholder="应聘岗位" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="outputType">报告输出类型</label>
+          <select id="outputType">
+            <option value="docx">DOCX</option>
+            <option value="json">JSON</option>
+          </select>
+        </div>
+        <div class="field">
+          <span></span>
+          <button id="generateBtn" type="submit">生成报告</button>
+        </div>
+      </form>
+      <div class="note">生成完毕后，DOCX 文件会自动下载；选择 JSON 可查看填充后的数据结构。</div>
+      <div id="generateResult" class="result-box"></div>
+    </div>
+  </div>
+
+  <script>
+    const doc2mdForm = document.getElementById('doc2mdForm');
+    const doc2mdOutput = document.getElementById('doc2mdOutput');
+    const doc2mdBtn = document.getElementById('doc2mdBtn');
+    const saveMdBtn = document.getElementById('saveMdBtn');
+    const generateForm = document.getElementById('generateForm');
+    const generateBtn = document.getElementById('generateBtn');
+    const generateResult = document.getElementById('generateResult');
+    let currentDoc2MdContent = '';
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          const base64 = result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function fileToText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file, 'utf-8');
+      });
+    }
+
+    async function fetchTextStream(url, body, onChunk) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || response.statusText);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk) {
+          onChunk(chunk);
+        }
+      }
+    }
+
+    doc2mdForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      doc2mdOutput.textContent = '';
+      doc2mdBtn.disabled = true;
+      try {
+        const fileInput = document.getElementById('doc2mdFile');
+        if (!fileInput.files.length) {
+          throw new Error('请先选择一个 DOCX 文件。');
+        }
+        const base64 = await fileToBase64(fileInput.files[0]);
+        currentDoc2MdContent = '';
+        saveMdBtn.disabled = true;
+        doc2mdOutput.textContent = '';
+        await fetchTextStream('/doc2md/stream', { template_docx_b64: base64 }, (chunk) => {
+          currentDoc2MdContent += chunk;
+          doc2mdOutput.textContent = currentDoc2MdContent;
+          doc2mdOutput.scrollTop = doc2mdOutput.scrollHeight;
+          if (currentDoc2MdContent.length) {
+            saveMdBtn.disabled = false;
+          }
+        });
+      } catch (error) {
+        currentDoc2MdContent = '';
+        saveMdBtn.disabled = true;
+        doc2mdOutput.textContent = '生成失败：' + error.message;
+      } finally {
+        doc2mdBtn.disabled = false;
+      }
+    });
+
+    saveMdBtn.addEventListener('click', () => {
+      const content = currentDoc2MdContent || doc2mdOutput.textContent;
+      if (!content) return;
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'template.md';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    async function buildRequestContent() {
+      const content = {};
+      const templateDocxFile = document.getElementById('templateDocxFile').files[0];
+      const templateMdFile = document.getElementById('templateMdFile').files[0];
+      const jdFile = document.getElementById('jdFile').files[0];
+      const resumeFile = document.getElementById('resumeFile').files[0];
+      const transcriptFile = document.getElementById('transcriptFile').files[0];
+
+      if (templateDocxFile) {
+        content.template_docx_b64 = await fileToBase64(templateDocxFile);
+      }
+      if (templateMdFile) {
+        content.template_md = await fileToText(templateMdFile);
+      }
+      if (jdFile) {
+        content.job_description = await fileToText(jdFile);
+      }
+      if (resumeFile) {
+        content.resume_text = await fileToText(resumeFile);
+      }
+      if (transcriptFile) {
+        content.transcript_text = await fileToText(transcriptFile);
+      }
+
+      const baseInfo = {};
+      ['InterviewTime', 'InterviewFormat', 'InterviewerInfo', 'ReportCreator', 'ReportCreateDate', 'AppliedPosition'].forEach((key) => {
+        const value = document.getElementById(key).value.trim();
+        if (value) baseInfo[key] = value;
+      });
+      if (Object.keys(baseInfo).length) {
+        content.base_info = baseInfo;
+      }
+      content.request_type = document.getElementById('outputType').value;
+      return content;
+    }
+
+    generateForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      generateBtn.disabled = true;
+      generateResult.textContent = '开始生成，请稍候...';
+      try {
+        const body = await buildRequestContent();
+        const response = await fetch('/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || response.statusText);
+        }
+        const contentType = response.headers.get('Content-Type') || '';
+        const contentDisposition = response.headers.get('Content-Disposition') || '';
+        const isFile =
+          contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+          contentDisposition.toLowerCase().includes('filename=');
+
+        if (isFile) {
+          const blob = await response.blob();
+          const filenameMatch = contentDisposition.match(/filename\*=UTF-8''(.+)|filename="?([^";]+)"?/i);
+          const filename = filenameMatch
+            ? decodeURIComponent(filenameMatch[1] || filenameMatch[2])
+            : 'interview_report.docx';
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = filename;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+          generateResult.textContent = `报告已生成，下载完成：${filename}`;
+        } else {
+          const text = await response.text();
+          try {
+            const data = JSON.parse(text);
+            generateResult.textContent = JSON.stringify(data, null, 2);
+          } catch (e) {
+            generateResult.textContent = text;
+          }
+        }
+      } catch (error) {
+        generateResult.textContent = '生成失败：' + error.message;
+      } finally {
+        generateBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

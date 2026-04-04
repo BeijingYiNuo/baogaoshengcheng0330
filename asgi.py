@@ -4,7 +4,7 @@ import tempfile
 import os
 import json
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, StreamingResponse, Response, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from report_generator import (
     generate_interview_data_multi_stage_async,
@@ -108,16 +108,14 @@ async def doc2md_stream(request_content: Doc2MDRequest):
                     "model": request_content.openai_model,
                 },
             ):
-                yield f"data: {chunk}\n\n"
-
-            yield "event: end\ndata: [DONE]\n\n"
+                yield chunk
 
         finally:
             os.remove(path)
 
     return StreamingResponse(
         event_generator(),
-        media_type="text/event-stream",
+        media_type="text/plain; charset=utf-8",
     )
 
 
@@ -178,3 +176,15 @@ async def generate_docx(request_content: RequestContent):
         )
     elif request_content.request_type == "json":
         return GenerateJSONResponse(idx=info.idx, data=data)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index_page():
+    html_path = dirname(__file__) + "/index.html"
+    return HTMLResponse(open(html_path, "r", encoding="utf-8").read())
+
+
+@app.get("/index.html", response_class=HTMLResponse)
+async def index_html():
+    html_path = dirname(__file__) + "/index.html"
+    return HTMLResponse(open(html_path, "r", encoding="utf-8").read())
