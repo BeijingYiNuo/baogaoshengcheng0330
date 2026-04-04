@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <title>图片文字识别（OpenAI）</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .file-result {
+            border: 1px solid #ddd;
+            padding: 14px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+
+        .file-result h4 {
+            margin: 0 0 8px;
+        }
+
+        .file-result .status {
+            font-weight: bold;
+        }
+
+        .file-result pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 12px;
+            border-radius: 6px;
+            max-height: 320px;
+            overflow: auto;
+        }
+
+        .summary {
+            margin-bottom: 14px;
+            font-weight: bold;
+        }
+
+        .actions {
+            margin-bottom: 16px;
+        }
+
+        .actions button {
+            margin-right: 8px;
+            padding: 10px 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>批量图片识别并保存 Markdown</h2>
+
+    <div class="actions">
+        <input type="file" id="imageInput" accept="image/*" multiple />
+        <button type="button" onclick="analyzeImages()">开始识别</button>
+        <button type="button" id="saveButton" onclick="saveAllMarkdowns()" disabled>批量保存 Markdown</button>
+    </div>
+
+    <textarea id="prompt" rows="6">请提取图片中的所有文字，并按Markdown格式输出，意思表达准确即可，格式无需一比一符合。</textarea>
+    <br><br>
+
+    <h3>识别结果：</h3>
+    <div id="results"></div>
+
+    <script>
+        const API_KEY = "76a878dc-4905-44c3-858c-8ef33006250f"; // ⚠️ 请替换成你的key
+        const MODEL = "ep-20260316191053-r2gh9";
+        const resultsStore = new Map();
+
+        async function analyzeImages() {
+            const fileInput = document.getElementById("imageInput");
+            const prompt = document.getElementById("prompt").value.trim();
+            const resultsWrapper = document.getElementById("results");
+            const saveButton = document.getElementById("saveButton");
+
+            if (!fileInput.files.length) {
+                alert("请先选择至少一张图片");
+                return;
+            }
+
+            resultsWrapper.innerHTML = "";
+            resultsStore.clear();
+            saveButton.disabled = true;
+
+            const files = Array.from(fileInput.files);
+            const tasks = files.map((file, index) => processFile(file, index, prompt));
+
+            const settled = await Promise.allSettled(tasks);
+            const successCount = settled.filter(item => item.status === "fulfilled").length;
+            const failureCount = settled.filter(item => item.status === "rejected").length;
+
+            const summary = document.createElement("div");
+            summary.className = "summary";
+            summary.textContent = `识别完成：成功 ${successCount}，失败 ${failureCount}`;
+            resultsWrapper.appendChild(summary);
+
+            if (successCount > 0) {
+                saveButton.disabled = false;
+            }
+        }
+
+        async function processFile(file, fileId, prompt) {
+            const resultsWrapper = document.getElementById("results");
+            const section = createResultSection(file.name, fileId);
+            resultsWrapper.appendChild(section.container);
+
+            let resultText = "";
+            let buffer = "";
+
+            section.status.textContent = "正在识别...";
+
+            try {
+                const base64 = await toBase64(file);
+                const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: MODEL,
+                        messages: [
+                            {
+                                role: "user",
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: prompt
+                                    },
+                                    {
+                                        type: "image_url",
+                                        image_url: base64
+                                    }
+                                ]
+                            }
+                        ],
+                        thinking: { type: "disabled" },
+                        stream: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let done = false;
+
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    if (readerDone) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop();
+
+                    for (const rawLine of lines) {
+                        const line = rawLine.trim();
+                        if (!line || !line.startsWith("data:")) continue;
+
+                        const jsonStr = line.slice(5).trim();
+                        if (jsonStr === "[DONE]") {
+                            done = true;
+                            break;
+                        }
+
+                        try {
+                            const json = JSON.parse(jsonStr);
+                            const delta = json.choices?.[0]?.delta?.content;
+                            if (delta) {
+                                resultText += delta;
+                                section.output.textContent = resultText;
+                            }
+                        } catch (error) {
+                            console.warn("解析失败：", jsonStr, error);
+                        }
+                    }
+                }
+
+                if (buffer.trim()) {
+                    const line = buffer.trim();
+                    if (line.startsWith("data:")) {
+                        const jsonStr = line.slice(5).trim();
+                        if (jsonStr !== "[DONE]") {
+                            const json = JSON.parse(jsonStr);
+                            const delta = json.choices?.[0]?.delta?.content;
+                            if (delta) {
+                                resultText += delta;
+                                section.output.textContent = resultText;
+                            }
+                        }
+                    }
+                }
+
+                section.status.textContent = "已完成";
+                const fileKey = fileId.toString();
+                resultsStore.set(fileKey, {
+                    fileName: file.name,
+                    text: resultText
+                });
+                section.saveButton.disabled = false;
+                section.saveButton.onclick = () => saveMarkdown(fileKey);
+            } catch (error) {
+                section.status.textContent = `出错：${error.message}`;
+                section.output.textContent = `识别失败：${error.message}`;
+                throw error;
+            }
+        }
+
+        function createResultSection(fileName, fileId) {
+            const container = document.createElement("div");
+            container.className = "file-result";
+
+            const title = document.createElement("h4");
+            title.textContent = fileName;
+            container.appendChild(title);
+
+            const status = document.createElement("div");
+            status.innerHTML = `状态：<span class="status">等待中</span>`;
+            container.appendChild(status);
+
+            const output = document.createElement("pre");
+            output.textContent = "";
+            container.appendChild(output);
+
+            const saveButton = document.createElement("button");
+            saveButton.type = "button";
+            saveButton.textContent = "保存该 Markdown";
+            saveButton.disabled = true;
+            saveButton.style.marginTop = "10px";
+            container.appendChild(saveButton);
+
+            return { container, status: status.querySelector(".status"), output, saveButton };
+        }
+
+        function saveMarkdown(fileKey) {
+            const item = resultsStore.get(fileKey);
+            if (!item || !item.text) {
+                return;
+            }
+
+            const blob = new Blob([item.text], { type: "text/markdown;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = changeExtension(item.fileName, "md");
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function saveAllMarkdowns() {
+            for (const fileKey of resultsStore.keys()) {
+                saveMarkdown(fileKey);
+            }
+        }
+
+        function changeExtension(fileName, newExt) {
+            const index = fileName.lastIndexOf(".");
+            if (index === -1) {
+                return `${fileName}.${newExt}`;
+            }
+            return `${fileName.slice(0, index)}.${newExt}`;
+        }
+
+        function toBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+    </script>
+</body>
+
+</html>

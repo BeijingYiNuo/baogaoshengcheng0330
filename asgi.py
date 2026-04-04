@@ -5,6 +5,7 @@ import os
 import json
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, StreamingResponse, Response, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from report_generator import (
     generate_interview_data_multi_stage_async,
     fill_docx_template,
@@ -16,6 +17,7 @@ from doc2md import llm_process, llm_process_stream, pandoc_process
 
 ssm = SimpleStateManager("./reports")
 app = FastAPI()
+app.mount("/static", StaticFiles(directory=dirname(__file__)), name="static")
 
 
 class BaseInfo(BaseModel):
